@@ -1,14 +1,10 @@
 <?php
 echo "Starting\n";
 
-# Create our worker object.
 $gmworker= new GearmanWorker();
 
-# Add default server (localhost).
 $gmworker->addServer();
 
-# Register function "reverse" with the server. Change the worker function to
-# "reverse_fn_fast" for a faster worker with no output.
 $gmworker->addFunction("hashFile", "hash_file_fn");
 
 echo 'Waiting for job...' . PHP_EOL;
@@ -31,6 +27,7 @@ function hash_file_fn($job) {
 	  'size' => $file_size,
 	  'size_str' => $size_str, 
 	  'hash_val' => $hash_val, 
+	  'hash_num' => hash2num($hash_val),
   );
   echo TDb::saveData($data) ? 'save success' . PHP_EOL : 'save failed' . PHP_EOL;
   return $path;
@@ -41,14 +38,24 @@ function getSizeStr($file_size, $decimals = 2) {
   $factor = floor((strlen($file_size) - 1) / 3);
   return sprintf("%.{$decimals}f", $file_size / pow(1024, $factor)) . @$sz[$factor];
 }
+function hash2num($str) {
+	$num = 0;
+	for($i=0,$j=strlen($str);$i<$j;$i++) {
+		$num += ord($str[$i]);
+	}
+	return $num;
+}
 
 class TDb {
 	static $con = false;
+	static $sth = false;
 	static function getCon() {
 		if (self::$con) return self::$con;
 		try {
-			$dsn = 'mysql:dbname=test;host=127.0.0.1';
-			$dbh = new PDO($dsn, 'test', 'test', array(PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8"));
+			//$dsn = 'mysql:dbname=test;host=127.0.0.1';
+			//$dbh = new PDO($dsn, 'test', 'test', array(PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8"));
+			$dsn = 'sqlite:' . __DIR__ . DIRECTORY_SEPARATOR . 'sqlite3.db';
+			$dbh = new PDO($dsn, '', '', array(PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8"));
 			self::$con = $dbh;
 			return $dbh;
 		} catch (PDOException $e) {
@@ -56,13 +63,15 @@ class TDb {
 		}
 	}
 	static function saveData($data) {
-		$sql = 'INSERT INTO `dup_finder_new` (`path`,`size`,`size_str`,`hash`) VALUES (:path, :size, :size_str, :hash_val)';
+		$sql = 'INSERT INTO `dup_finder` (`path`,`size`,`size_str`,`hash`, `hash_num`) VALUES (:path, :size, :size_str, :hash_val, :hash_num)';
 		$sth = self::getCon()->prepare($sql);
 		$sth->bindValue(':path', $data['path'], PDO::PARAM_STR);
 		$sth->bindValue(':size', $data['size'], PDO::PARAM_INT);
 		$sth->bindValue(':size_str', $data['size_str'], PDO::PARAM_STR);
 		$sth->bindValue(':hash_val', $data['hash_val'], PDO::PARAM_STR);
-		return $sth->execute();
+		$sth->bindValue(':hash_num', $data['hash_num'], PDO::PARAM_INT);
+		$rslt = $sth->execute();
+		if (!$rslt) var_dump($sth->errorInfo());
+		return $rslt;
 	}
 }
-
