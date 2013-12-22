@@ -1,0 +1,15 @@
+#!/bin/bash
+while read oldrev newrev refname
+do
+	branch=$(git rev-parse --symbolic --abbrev-ref $refname)
+	echo Update pushed to branch $branch
+	if [ "$branch" = "staging" ] 
+	then
+		echo branch is $branch and file pushed to dir
+		GIT_WORK_TREE=/path/to/stage/site/dir git checkout -f
+	fi
+	echo refname $refname
+	echo oldrev $oldrev
+	echo newrev $newrev
+done
+exit 0
